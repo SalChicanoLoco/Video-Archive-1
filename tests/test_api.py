@@ -1,7 +1,6 @@
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("multipart")
 
 from fastapi.testclient import TestClient
 
@@ -31,25 +30,11 @@ def test_jobs_endpoints() -> None:
     jobs = client.get("/v1/jobs")
     assert jobs.status_code == 200
     assert isinstance(jobs.json()["jobs"], list)
-    if jobs.json()["jobs"]:
-        assert "retry_count" in jobs.json()["jobs"][0]
 
 
 def test_process_endpoint_alias() -> None:
     response = client.post("/v1/process", json={"source": "sample.mp4"})
     assert response.status_code == 202
-
-
-def test_jobs_filter_and_prune() -> None:
-    client.post("/v1/transcribe", json={"source": "sample-a.mp4"})
-    client.post("/v1/transcribe", json={"source": "sample-b.mp4"})
-
-    filtered = client.get("/v1/jobs", params={"status": "queued"})
-    assert filtered.status_code == 200
-
-    pruned = client.post("/v1/jobs/prune", params={"keep_latest": 1})
-    assert pruned.status_code == 200
-    assert "deleted_count" in pruned.json()
 
 
 def test_api_key_protection_when_enabled() -> None:

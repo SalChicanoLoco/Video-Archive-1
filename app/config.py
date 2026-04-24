@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     sqlite_db_path: str = "data/jobs.db"
     app_port: int = 8000
     api_key: str = ""
-    max_retries: int = 2
-    retry_backoff_seconds: int = 2
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="")
 
