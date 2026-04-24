@@ -12,14 +12,13 @@ Container-first FastAPI transcription scaffold with built-in web dashboard.
 
 - FastAPI backend on port **8000** (`uvicorn`)
 - Static frontend served from same origin (`/` + `/static`)
-- Tape status dashboard table
-- File upload/intake form
-- Job progress indicator
+- Tape status dashboard table + upload intake + progress indicator
 - Provider plugin registration (`PROVIDER_PLUGINS`)
 - Background task processing for long-running jobs
 - Job polling (`/v1/job/{id}`)
 - Optional Airtable status logging hook (`airtable_client.log`)
 - Optional API key auth (`x-api-key`)
+- Streamlined jobs API with filtering and pruning
 
 ## Run (Docker only)
 
@@ -38,7 +37,8 @@ Open browser:
 - `POST /v1/process` -> enqueue job, returns `job_id`
 - `POST /v1/intake` -> multipart file upload + enqueue
 - `GET /v1/job/{job_id}` -> job status
-- `GET /v1/jobs` -> dashboard listing
+- `GET /v1/jobs?limit=100&status=queued` -> job listing/filtering
+- `POST /v1/jobs/prune?keep_latest=500` -> prune older jobs
 - `GET /v1/health`
 
 ## Auth
@@ -49,7 +49,7 @@ If `API_KEY` is set, protected endpoints require header:
 x-api-key: <API_KEY>
 ```
 
-Protected endpoints: `/v1/transcribe`, `/v1/process`, `/v1/intake`, `/v1/job/{id}`, `/v1/jobs`.
+Protected endpoints: `/v1/transcribe`, `/v1/process`, `/v1/intake`, `/v1/job/{id}`, `/v1/jobs`, `/v1/jobs/prune`.
 
 ## Background tasks
 
