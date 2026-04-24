@@ -1,34 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol
-
-from app.config import settings
-from app.jobs.sqlite_store import SQLiteJobStore
-from app.jobs.store import InMemoryJobStore, JobRecord
+from app.jobs.store import InMemoryJobStore
 from app.providers.factory import UnsupportedProviderError, get_provider
 
-
-class JobStore(Protocol):
-    def create_job(self, source: str, provider: str) -> JobRecord: ...
-
-    def get_job(self, job_id: str) -> JobRecord | None: ...
-
-    def set_status(
-        self,
-        job_id: str,
-        status: str,
-        result_text: str | None = None,
-        error: str | None = None,
-    ) -> JobRecord | None: ...
-
-
-def _build_job_store() -> JobStore:
-    if settings.job_store_backend == "sqlite":
-        return SQLiteJobStore(settings.sqlite_db_path)
-    return InMemoryJobStore()
-
-
-job_store: JobStore = _build_job_store()
+job_store = InMemoryJobStore()
 
 
 async def run_transcription_job(job_id: str) -> None:
