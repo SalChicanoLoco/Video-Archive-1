@@ -1,0 +1,4 @@
+# MCP server dependencies — installed by setup.sh, NOT inside Docker
+# These run on the HOST machine alongside Claude Code.
+mcp[cli]>=1.9.0
+pyairtable>=3.3.0
