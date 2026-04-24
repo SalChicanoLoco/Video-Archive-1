@@ -3,15 +3,9 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Request, UploadFile
 
 from app.config import settings
-from app.jobs.service import (
-    enqueue_job,
-    job_store,
-    run_transcription_job,
-    to_job_status_response,
-)
+from app.jobs.service import enqueue_job, job_store, run_transcription_job
 from app.providers.factory import list_supported_providers
 from app.schemas.transcription import (
-    JobsPruneResponse,
     ProvidersResponse,
     TranscriptionJobRequest,
     TranscriptionJobResponse,
@@ -23,6 +17,7 @@ router = APIRouter(prefix="/v1", tags=["v1"])
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
+    """Require x-api-key only when API_KEY is configured."""
     if not settings.api_key:
         return
 
@@ -82,9 +77,7 @@ async def intake(
 ) -> TranscriptionJobResponse:
     uploads_dir = Path("/srv/app/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
-
-    filename = Path(file.filename or "uploaded.bin").name
-    target = uploads_dir / filename
+    target = uploads_dir / file.filename
     content = await file.read()
     target.write_bytes(content)
 
@@ -98,25 +91,36 @@ async def get_job(job_id: str, _auth: None = Depends(require_api_key)) -> Transc
     if record is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    return to_job_status_response(record)
+    return TranscriptionJobStatusResponse(
+        job_id=record.job_id,
+        status=record.status,
+        source=record.source,
+        provider=record.provider,
+        result_text=record.result_text,
+        error=record.error,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
 
 
 @router.get("/jobs", response_model=TranscriptionJobsListResponse)
 async def list_jobs(
     limit: int = 100,
-    status: str | None = None,
     _auth: None = Depends(require_api_key),
 ) -> TranscriptionJobsListResponse:
-    records = job_store.list_jobs(limit=limit, status=status)
-    return TranscriptionJobsListResponse(jobs=[to_job_status_response(r) for r in records])
-
-
-@router.post("/jobs/prune", response_model=JobsPruneResponse)
-async def prune_jobs(
-    keep_latest: int = 500,
-    _auth: None = Depends(require_api_key),
-) -> JobsPruneResponse:
-    if keep_latest < 1:
-        raise HTTPException(status_code=400, detail="keep_latest must be >= 1")
-    deleted_count = job_store.prune_jobs(keep_latest=keep_latest)
-    return JobsPruneResponse(deleted_count=deleted_count)
+    records = job_store.list_jobs(limit=limit)
+    return TranscriptionJobsListResponse(
+        jobs=[
+            TranscriptionJobStatusResponse(
+                job_id=r.job_id,
+                status=r.status,
+                source=r.source,
+                provider=r.provider,
+                result_text=r.result_text,
+                error=r.error,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+            for r in records
+        ]
+    )
