@@ -6,7 +6,6 @@ This repo exposes a queue-based transcription API suitable for Airtable automati
 
 - Enqueue: `POST /v1/transcribe` or `POST /v1/process`
 - Poll one: `GET /v1/job/{job_id}`
-- Poll events: `GET /v1/job/{job_id}/events`
 - List jobs: `GET /v1/jobs`
 - Intake upload: `POST /v1/intake` (multipart)
 - Metrics: `GET /metrics`
@@ -34,21 +33,13 @@ All non-2xx errors return:
 - `error` -> long text
 - `updated_at` -> datetime
 
-For event timeline table:
-
-- `job_id`
-- `event`
-- `timestamp`
-- `detail`
-
 ## Suggested Claude tasks
 
 1. Read table row needing transcription.
 2. Call enqueue endpoint and store returned `job_id`.
 3. Poll `/v1/job/{job_id}` on schedule.
-4. Optionally ingest `/v1/job/{job_id}/events` for audit timeline.
-5. On `succeeded`, write transcript back to Airtable.
-6. On `failed`, write `error`, `retry_count`, and `request_id`.
+4. On `succeeded`, write transcript back to Airtable.
+5. On `failed`, write `error`, `retry_count`, and `request_id`.
 
 ## Auth
 

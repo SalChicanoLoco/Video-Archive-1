@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Archive UI</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 2rem; max-width: 760px; }
+      input, button, textarea { font-size: 1rem; padding: 0.5rem; margin: 0.25rem 0; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <h1>Video Archive Tester</h1>
+    <p>Backend API: <span class="mono">http://localhost:8000</span></p>
+
+    <div class="card">
+      <h3>Health Check</h3>
+      <button onclick="health()">Run /v1/health</button>
+      <pre id="healthOut"></pre>
+    </div>
+
+    <div class="card">
+      <h3>Transcribe Job</h3>
+      <label>Source</label><br />
+      <input id="source" value="sample.mp4" size="40" />
+      <div class="row">
+        <button onclick="enqueueJob()">Enqueue Job</button>
+        <button onclick="pollJob()">Poll Job</button>
+      </div>
+      <label>Job ID</label><br />
+      <input id="jobId" size="50" class="mono" />
+      <pre id="jobOut"></pre>
+    </div>
+
+    <script>
+      const API = "http://localhost:8000";
+
+      async function health() {
+        const r = await fetch(`${API}/v1/health`);
+        document.getElementById("healthOut").textContent = JSON.stringify(await r.json(), null, 2);
+      }
+
+      async function enqueueJob() {
+        const source = document.getElementById("source").value;
+        const r = await fetch(`${API}/v1/jobs/transcribe`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ source })
+        });
+        const body = await r.json();
+        document.getElementById("jobId").value = body.job_id || "";
+        document.getElementById("jobOut").textContent = JSON.stringify(body, null, 2);
+      }
+
+      async function pollJob() {
+        const jobId = document.getElementById("jobId").value;
+        if (!jobId) return;
+        const r = await fetch(`${API}/v1/jobs/${jobId}`);
+        document.getElementById("jobOut").textContent = JSON.stringify(await r.json(), null, 2);
+      }
+    </script>
+  </body>
+</html>
