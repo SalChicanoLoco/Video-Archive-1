@@ -14,9 +14,6 @@ def test_sqlite_store_create_and_update(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.source == "video.mp4"
 
-    listed = store.list_jobs()
-    assert len(listed) == 1
-
     updated = store.set_status(created.job_id, status="succeeded", result_text="ok")
     assert updated is not None
     assert updated.status == "succeeded"

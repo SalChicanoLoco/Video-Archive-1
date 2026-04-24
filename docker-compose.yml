@@ -9,4 +9,12 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/srv/app/data
-      - ./uploads:/srv/app/uploads
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"

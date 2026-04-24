@@ -1,7 +1,3 @@
-import pytest
-
-pytest.importorskip("fastapi")
-
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -10,27 +6,33 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_health_v1() -> None:
-    response = client.get("/v1/health", headers={"x-request-id": "req-123"})
+def test_health() -> None:
+    response = client.get("/health")
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["api_version"] == "v1"
+    assert "provider" in body
 
 
-def test_jobs_endpoints() -> None:
-    response = client.post("/v1/transcribe", json={"source": "sample.mp4"})
-    assert response.status_code == 202
-    job_id = response.json()["job_id"]
-
-    status = client.get(f"/v1/job/{job_id}")
-    assert status.status_code == 200
-
-    jobs = client.get("/v1/jobs")
-    assert jobs.status_code == 200
-    assert isinstance(jobs.json()["jobs"], list)
+def test_providers() -> None:
+    response = client.get("/providers")
+    assert response.status_code == 200
+    body = response.json()
+    assert "mock" in body["supported_providers"]
 
 
-def test_process_endpoint_alias() -> None:
-    response = client.post("/v1/process", json={"source": "sample.mp4"})
-    assert response.status_code == 202
+def test_transcribe_with_default_provider() -> None:
+    response = client.post("/transcribe", json={"source": "sample.mp4"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "mock"
+    assert "sample.mp4" in body["text"]
+
+
+def test_transcribe_with_unsupported_provider() -> None:
+    response = client.post(
+        "/transcribe",
+        json={"source": "sample.mp4", "provider": "whisper"},
+    )
+    assert response.status_code == 400
+    assert "intentionally not wired" in response.json()["detail"]
