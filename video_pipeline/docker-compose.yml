@@ -1,0 +1,27 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    image: video-pipeline:latest
+    container_name: video_pipeline_app
+    env_file:
+      - .env
+    volumes:
+      # Mount host directories into the container. These named volumes
+      # correspond to the input, output and models caches. They map to
+      # /app/input, /app/output and /app/models inside the container
+      - input:/app/input
+      - output:/app/output
+      - models:/app/models
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+volumes:
+  input:
+    name: video_pipeline_input
+  output:
+    name: video_pipeline_output
+  models:
+    name: video_pipeline_models
