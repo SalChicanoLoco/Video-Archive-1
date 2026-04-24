@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transcription Dashboard</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 1.5rem; max-width: 980px; }
+      table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+      th { background: #f6f6f6; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+      input, button { padding: 0.4rem 0.6rem; }
+      progress { width: 250px; }
+    </style>
+  </head>
+  <body>
+    <h1>Tape Status Dashboard</h1>
+
+    <div class="card">
+      <h3>File Upload / Intake</h3>
+      <input id="fileInput" type="file" />
+      <button onclick="uploadFile()">Upload & Queue</button>
+      <div id="uploadResult"></div>
+    </div>
+
+    <div class="card">
+      <h3>Job Progress</h3>
+      <div class="row">
+        <input id="jobIdInput" placeholder="Job ID" size="40" />
+        <button onclick="pollJob()">Poll</button>
+        <progress id="jobProgress" max="100" value="0"></progress>
+        <span id="jobStatusLabel">idle</span>
+      </div>
+      <pre id="jobDetails"></pre>
+    </div>
+
+    <div class="card">
+      <h3>Tape Status Dashboard Table</h3>
+      <button onclick="loadJobs()">Refresh</button>
+      <table>
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Provider</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody id="jobsTbody"></tbody>
+      </table>
+    </div>
+
+    <script>
+      async function uploadFile() {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return;
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch('/v1/intake', { method: 'POST', body: fd });
+        const body = await r.json();
+        document.getElementById('jobIdInput').value = body.job_id || '';
+        document.getElementById('uploadResult').textContent = JSON.stringify(body);
+        loadJobs();
+      }
+
+      async function pollJob() {
+        const jobId = document.getElementById('jobIdInput').value;
+        if (!jobId) return;
+        const r = await fetch(`/v1/job/${jobId}`);
+        const body = await r.json();
+        document.getElementById('jobDetails').textContent = JSON.stringify(body, null, 2);
+        document.getElementById('jobStatusLabel').textContent = body.status;
+        const pct = body.status === 'succeeded' ? 100 : (body.status === 'running' ? 50 : 10);
+        document.getElementById('jobProgress').value = pct;
+      }
+
+      async function loadJobs() {
+        const r = await fetch('/v1/jobs');
+        const body = await r.json();
+        const tbody = document.getElementById('jobsTbody');
+        tbody.innerHTML = '';
+        for (const job of body.jobs || []) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${job.job_id}</td><td>${job.source}</td><td>${job.status}</td><td>${job.provider}</td><td>${job.updated_at}</td>`;
+          tbody.appendChild(tr);
+        }
+      }
+
+      loadJobs();
+    </script>
+  </body>
+</html>
