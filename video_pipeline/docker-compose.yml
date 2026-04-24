@@ -1,27 +1,28 @@
 version: '3.9'
 
 services:
-  app:
+  pipeline:
     build: .
     image: video-pipeline:latest
-    container_name: video_pipeline_app
+    container_name: video_pipeline
     env_file:
       - .env
     volumes:
-      # Mount host directories into the container. These named volumes
-      # correspond to the input, output and models caches. They map to
-      # /app/input, /app/output and /app/models inside the container
-      - input:/app/input
-      - output:/app/output
-      - models:/app/models
+      # Bind mounts: drop MP4s in ./input, SRTs appear in ./output
+      - ./input:/app/input
+      - ./output:/app/output
+      # Named volume for the Whisper model — Docker auto-seeds from image on first run
+      - pipeline_models:/app/models
     ports:
       - "5000:5000"
     restart: unless-stopped
+    # Increase gunicorn timeout for synchronous /process calls on long files
+    command: >
+      gunicorn --workers 1 --threads 4 --timeout 0
+      --bind 0.0.0.0:5000
+      --access-logfile - --error-logfile -
+      app.app:app
 
 volumes:
-  input:
-    name: video_pipeline_input
-  output:
-    name: video_pipeline_output
-  models:
+  pipeline_models:
     name: video_pipeline_models
