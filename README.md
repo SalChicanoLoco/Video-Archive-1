@@ -1,62 +1,70 @@
 # Video-Archive-1
 
-KISS-first FastAPI service for transcription jobs.
+Container-first FastAPI transcription scaffold with built-in web dashboard.
 
-## Product goal (current)
+## Stack decisions
 
-Ship a usable core loop quickly:
+- Flask -> **FastAPI**
+- gunicorn -> **uvicorn**
+- `@app.route` -> FastAPI decorators (`@app.get`, `@app.post`)
 
-1. Enqueue a transcription job.
-2. Poll job status.
-3. Read transcript (or error) when done.
+## What this includes
 
-This repository intentionally keeps advanced features optional so the MVP stays easy to run and reason about.
+- FastAPI backend on port **8000** (`uvicorn`)
+- Static frontend served from same origin (`/` + `/static`)
+- Tape status dashboard table + upload intake + progress indicator
+- Provider plugin registration (`PROVIDER_PLUGINS`)
+- Background task processing for long-running jobs
+- Job polling (`/v1/job/{id}`)
+- Optional Airtable status logging hook (`airtable_client.log`)
+- Optional API key auth (`x-api-key`)
+- Streamlined jobs API with filtering and pruning
 
-## MVP endpoints
-
-- `POST /v1/transcribe` — enqueue by source
-- `POST /v1/intake` — upload file and enqueue
-- `GET /v1/job/{job_id}` — poll status
-- `GET /v1/health` — health check
-
-## Quick start (Docker)
+## Run (Docker only)
 
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-Open: `http://localhost:8000`
+Open browser:
+
+- `http://localhost:8000` (web UI)
+
+## Primary API endpoints
+
+- `POST /v1/transcribe` -> enqueue job, returns `job_id`
+- `POST /v1/process` -> enqueue job, returns `job_id`
+- `POST /v1/intake` -> multipart file upload + enqueue
+- `GET /v1/job/{job_id}` -> job status
+- `GET /v1/jobs?limit=100&status=queued` -> job listing/filtering
+- `POST /v1/jobs/prune?keep_latest=500` -> prune older jobs
+- `GET /v1/health`
+
+## Auth
+
+If `API_KEY` is set, protected endpoints require header:
+
+```http
+x-api-key: <API_KEY>
+```
+
+Protected endpoints: `/v1/transcribe`, `/v1/process`, `/v1/intake`, `/v1/job/{id}`, `/v1/jobs`, `/v1/jobs/prune`.
+
+## Background tasks
+
+Long-running operations use FastAPI `BackgroundTasks` so requests return quickly and UI stays responsive.
 
 ## Environment
 
 - `TRANSCRIPTION_PROVIDER=mock`
+- `PROVIDER_PLUGINS=`
 - `JOB_STORE_BACKEND=memory|sqlite`
 - `SQLITE_DB_PATH=data/jobs.db`
+- `APP_PORT=8000`
 - `API_KEY=`
-- `MAX_RETRIES=2`
-- `RETRY_BACKOFF_SECONDS=2`
 
-## Error contract
+## Notes
 
-All non-2xx API responses return JSON:
-
-```json
-{
-  "code": "UNAUTHORIZED|NOT_FOUND|VALIDATION_ERROR|...",
-  "message": "human-readable",
-  "details": {},
-  "request_id": "trace-id"
-}
-```
-
-## Optional / advanced features
-
-These remain available but are not required for the MVP flow:
-
-- `GET /v1/jobs` and `POST /v1/jobs/prune`
-- `GET /v1/job/{job_id}/events`
-- `GET /v1/providers`
-- provider plugins via `PROVIDER_PLUGINS`
-- Prometheus-style metrics endpoint at `/metrics`
-- optional Airtable logging hook (`airtable_client.log`)
+- If `airtable_client.py` is present, job status events are logged via `airtable_client.log(...)`.
+- If missing, jobs still run normally.
