@@ -46,3 +46,8 @@ class TranscriptionJobStatusResponse(BaseModel):
 
 class TranscriptionJobsListResponse(BaseModel):
     jobs: list[TranscriptionJobStatusResponse]
+
+
+class PruneResponse(BaseModel):
+    deleted: int
+    kept: int

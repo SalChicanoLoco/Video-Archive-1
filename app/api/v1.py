@@ -7,6 +7,7 @@ from app.jobs.service import enqueue_job, job_store, run_transcription_job
 from app.providers.factory import list_supported_providers
 from app.schemas.transcription import (
     ProvidersResponse,
+    PruneResponse,
     TranscriptionJobRequest,
     TranscriptionJobResponse,
     TranscriptionJobsListResponse,
@@ -77,7 +78,7 @@ async def intake(
 ) -> TranscriptionJobResponse:
     uploads_dir = Path("/srv/app/uploads")
     uploads_dir.mkdir(parents=True, exist_ok=True)
-    target = uploads_dir / file.filename
+    target = uploads_dir / Path(file.filename or "uploaded.bin").name
     content = await file.read()
     target.write_bytes(content)
 
@@ -106,9 +107,10 @@ async def get_job(job_id: str, _auth: None = Depends(require_api_key)) -> Transc
 @router.get("/jobs", response_model=TranscriptionJobsListResponse)
 async def list_jobs(
     limit: int = 100,
+    status: str | None = None,
     _auth: None = Depends(require_api_key),
 ) -> TranscriptionJobsListResponse:
-    records = job_store.list_jobs(limit=limit)
+    records = job_store.list_jobs(limit=limit, status=status)
     return TranscriptionJobsListResponse(
         jobs=[
             TranscriptionJobStatusResponse(
@@ -124,3 +126,13 @@ async def list_jobs(
             for r in records
         ]
     )
+
+
+@router.post("/jobs/prune", response_model=PruneResponse)
+async def prune_jobs(
+    keep_latest: int = 500,
+    _auth: None = Depends(require_api_key),
+) -> PruneResponse:
+    deleted = job_store.prune_jobs(keep_latest=keep_latest)
+    remaining = len(job_store.list_jobs(limit=keep_latest + 1))
+    return PruneResponse(deleted=deleted, kept=remaining)
