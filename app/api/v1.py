@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
 from app.config import settings
 from app.providers.factory import (
@@ -16,13 +16,12 @@ router = APIRouter(prefix="/v1", tags=["v1"])
 
 
 @router.get("/health")
-async def health(request: Request) -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "environment": settings.app_env,
         "provider": settings.transcription_provider,
         "api_version": "v1",
-        "request_id": request.state.request_id,
     }
 
 
