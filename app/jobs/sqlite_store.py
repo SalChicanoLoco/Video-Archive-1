@@ -93,22 +93,17 @@ class SQLiteJobStore:
             error=row[7],
         )
 
-    def list_jobs(self, limit: int = 100, status: str | None = None) -> list[JobRecord]:
-        query = """
-            SELECT job_id, source, provider, status, created_at, updated_at, result_text, error
-            FROM jobs
-        """
-        params: tuple[object, ...]
-        if status:
-            query += " WHERE status = ?"
-            query += " ORDER BY updated_at DESC LIMIT ?"
-            params = (status, limit)
-        else:
-            query += " ORDER BY updated_at DESC LIMIT ?"
-            params = (limit,)
-
+    def list_jobs(self, limit: int = 100) -> list[JobRecord]:
         with self._lock, self._connect() as conn:
-            rows = conn.execute(query, params).fetchall()
+            rows = conn.execute(
+                """
+                SELECT job_id, source, provider, status, created_at, updated_at, result_text, error
+                FROM jobs
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
 
         return [
             JobRecord(
@@ -123,22 +118,6 @@ class SQLiteJobStore:
             )
             for row in rows
         ]
-
-    def prune_jobs(self, keep_latest: int = 500) -> int:
-        with self._lock, self._connect() as conn:
-            to_delete = conn.execute(
-                """
-                SELECT job_id FROM jobs
-                ORDER BY updated_at DESC
-                LIMIT -1 OFFSET ?
-                """,
-                (keep_latest,),
-            ).fetchall()
-            delete_count = len(to_delete)
-            if delete_count:
-                conn.executemany("DELETE FROM jobs WHERE job_id = ?", to_delete)
-                conn.commit()
-            return delete_count
 
     def set_status(
         self,

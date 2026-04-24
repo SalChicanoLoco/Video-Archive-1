@@ -6,7 +6,6 @@ from app.config import settings
 from app.jobs.sqlite_store import SQLiteJobStore
 from app.jobs.store import InMemoryJobStore, JobRecord
 from app.providers.factory import UnsupportedProviderError, get_provider
-from app.schemas.transcription import TranscriptionJobStatusResponse
 
 
 class JobStore(Protocol):
@@ -14,9 +13,7 @@ class JobStore(Protocol):
 
     def get_job(self, job_id: str) -> JobRecord | None: ...
 
-    def list_jobs(self, limit: int = 100, status: str | None = None) -> list[JobRecord]: ...
-
-    def prune_jobs(self, keep_latest: int = 500) -> int: ...
+    def list_jobs(self, limit: int = 100) -> list[JobRecord]: ...
 
     def set_status(
         self,
@@ -39,20 +36,8 @@ def _airtable_log(event: str, payload: dict[str, str]) -> None:
 
         airtable_client.log(event, payload)
     except Exception:
+        # Keep background jobs robust if Airtable integration is missing.
         return
-
-
-def to_job_status_response(record: JobRecord) -> TranscriptionJobStatusResponse:
-    return TranscriptionJobStatusResponse(
-        job_id=record.job_id,
-        status=record.status,
-        source=record.source,
-        provider=record.provider,
-        result_text=record.result_text,
-        error=record.error,
-        created_at=record.created_at,
-        updated_at=record.updated_at,
-    )
 
 
 job_store: JobStore = _build_job_store()
@@ -80,6 +65,6 @@ async def run_transcription_job(job_id: str) -> None:
     except UnsupportedProviderError as exc:
         job_store.set_status(job_id, status="failed", error=str(exc))
         _airtable_log("job.failed", {"job_id": job_id, "reason": str(exc)})
-    except Exception as exc:
+    except Exception as exc:  # defensive catch for background task stability
         job_store.set_status(job_id, status="failed", error=str(exc))
         _airtable_log("job.failed", {"job_id": job_id, "reason": str(exc)})

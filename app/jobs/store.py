@@ -44,21 +44,11 @@ class InMemoryJobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
-    def list_jobs(self, limit: int = 100, status: str | None = None) -> list[JobRecord]:
+    def list_jobs(self, limit: int = 100) -> list[JobRecord]:
         with self._lock:
             jobs = list(self._jobs.values())
-        if status:
-            jobs = [j for j in jobs if j.status == status]
         jobs.sort(key=lambda x: x.updated_at, reverse=True)
         return jobs[:limit]
-
-    def prune_jobs(self, keep_latest: int = 500) -> int:
-        with self._lock:
-            jobs = sorted(self._jobs.values(), key=lambda x: x.updated_at, reverse=True)
-            keep_ids = {j.job_id for j in jobs[:keep_latest]}
-            before = len(self._jobs)
-            self._jobs = {k: v for k, v in self._jobs.items() if k in keep_ids}
-            return before - len(self._jobs)
 
     def set_status(
         self,

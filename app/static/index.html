@@ -11,19 +11,12 @@
       th { background: #f6f6f6; }
       .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
       .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-      input, button, select { padding: 0.4rem 0.6rem; }
+      input, button { padding: 0.4rem 0.6rem; }
       progress { width: 250px; }
     </style>
   </head>
   <body>
     <h1>Tape Status Dashboard</h1>
-
-    <div class="card">
-      <div class="row">
-        <label>API Key:</label>
-        <input id="apiKey" placeholder="optional x-api-key" size="32" />
-      </div>
-    </div>
 
     <div class="card">
       <h3>File Upload / Intake</h3>
@@ -45,17 +38,7 @@
 
     <div class="card">
       <h3>Tape Status Dashboard Table</h3>
-      <div class="row">
-        <select id="statusFilter">
-          <option value="">all</option>
-          <option value="queued">queued</option>
-          <option value="running">running</option>
-          <option value="succeeded">succeeded</option>
-          <option value="failed">failed</option>
-        </select>
-        <button onclick="loadJobs()">Refresh</button>
-        <button onclick="pruneJobs()">Prune old jobs</button>
-      </div>
+      <button onclick="loadJobs()">Refresh</button>
       <table>
         <thead>
           <tr>
@@ -71,17 +54,12 @@
     </div>
 
     <script>
-      function authHeaders() {
-        const key = document.getElementById('apiKey').value.trim();
-        return key ? { 'x-api-key': key } : {};
-      }
-
       async function uploadFile() {
         const file = document.getElementById('fileInput').files[0];
         if (!file) return;
         const fd = new FormData();
         fd.append('file', file);
-        const r = await fetch('/v1/intake', { method: 'POST', body: fd, headers: authHeaders() });
+        const r = await fetch('/v1/intake', { method: 'POST', body: fd });
         const body = await r.json();
         document.getElementById('jobIdInput').value = body.job_id || '';
         document.getElementById('uploadResult').textContent = JSON.stringify(body);
@@ -91,7 +69,7 @@
       async function pollJob() {
         const jobId = document.getElementById('jobIdInput').value;
         if (!jobId) return;
-        const r = await fetch(`/v1/job/${jobId}`, { headers: authHeaders() });
+        const r = await fetch(`/v1/job/${jobId}`);
         const body = await r.json();
         document.getElementById('jobDetails').textContent = JSON.stringify(body, null, 2);
         document.getElementById('jobStatusLabel').textContent = body.status;
@@ -100,9 +78,7 @@
       }
 
       async function loadJobs() {
-        const status = document.getElementById('statusFilter').value;
-        const q = status ? `?status=${encodeURIComponent(status)}` : '';
-        const r = await fetch(`/v1/jobs${q}`, { headers: authHeaders() });
+        const r = await fetch('/v1/jobs');
         const body = await r.json();
         const tbody = document.getElementById('jobsTbody');
         tbody.innerHTML = '';
@@ -111,14 +87,6 @@
           tr.innerHTML = `<td>${job.job_id}</td><td>${job.source}</td><td>${job.status}</td><td>${job.provider}</td><td>${job.updated_at}</td>`;
           tbody.appendChild(tr);
         }
-      }
-
-      async function pruneJobs() {
-        await fetch('/v1/jobs/prune?keep_latest=200', {
-          method: 'POST',
-          headers: authHeaders(),
-        });
-        loadJobs();
       }
 
       loadJobs();
