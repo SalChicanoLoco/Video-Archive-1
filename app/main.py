@@ -1,16 +1,8 @@
 from fastapi import FastAPI, HTTPException
 
 from app.config import settings
-from app.providers.factory import (
-    UnsupportedProviderError,
-    get_provider,
-    list_supported_providers,
-)
-from app.schemas.transcription import (
-    ProvidersResponse,
-    TranscriptionRequest,
-    TranscriptionResponse,
-)
+from app.providers.factory import UnsupportedProviderError, get_provider
+from app.schemas.transcription import TranscriptionRequest, TranscriptionResponse
 
 app = FastAPI(title=settings.app_name)
 
@@ -24,20 +16,10 @@ async def health() -> dict[str, str]:
     }
 
 
-@app.get("/providers", response_model=ProvidersResponse)
-async def providers() -> ProvidersResponse:
-    return ProvidersResponse(
-        configured_provider=settings.transcription_provider,
-        supported_providers=list_supported_providers(),
-    )
-
-
 @app.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe(payload: TranscriptionRequest) -> TranscriptionResponse:
-    provider_name = payload.provider or settings.transcription_provider
-
     try:
-        provider = get_provider(provider_name)
+        provider = get_provider(settings.transcription_provider)
     except UnsupportedProviderError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
