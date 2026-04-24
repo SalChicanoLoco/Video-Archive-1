@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Archive — KISS Dashboard</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 1.5rem; max-width: 760px; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+      .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+      input, button { padding: 0.4rem 0.6rem; }
+      progress { width: 240px; }
+      pre { background: #f8f8f8; padding: 0.75rem; border-radius: 6px; overflow-x: auto; }
+      .muted { color: #666; font-size: 0.95rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Video Archive</h1>
+    <p class="muted">Minimal flow: queue one job, poll one job.</p>
+
+    <div class="card">
+      <div class="row">
+        <label>API Key:</label>
+        <input id="apiKey" placeholder="optional x-api-key" size="32" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>1) Queue a Job</h3>
+      <div class="row">
+        <input id="sourceInput" placeholder="source (path or URL)" size="44" />
+        <button onclick="enqueueSource()">Queue source</button>
+      </div>
+      <div class="row" style="margin-top: 0.5rem;">
+        <input id="fileInput" type="file" />
+        <button onclick="uploadFile()">Upload + Queue</button>
+      </div>
+      <pre id="enqueueResult"></pre>
+    </div>
+
+    <div class="card">
+      <h3>2) Poll a Job</h3>
+      <div class="row">
+        <input id="jobIdInput" placeholder="job_id" size="44" />
+        <button onclick="pollJob()">Poll</button>
+        <progress id="jobProgress" max="100" value="0"></progress>
+        <span id="jobStatusLabel">idle</span>
+      </div>
+      <pre id="jobDetails"></pre>
+    </div>
+
+    <script>
+      function authHeaders(extra = {}) {
+        const key = document.getElementById('apiKey').value.trim();
+        return key ? { ...extra, 'x-api-key': key } : extra;
+      }
+
+      function writeJSON(id, value) {
+        document.getElementById(id).textContent = JSON.stringify(value, null, 2);
+      }
+
+      async function enqueueSource() {
+        const source = document.getElementById('sourceInput').value.trim();
+        if (!source) return;
+
+        const r = await fetch('/v1/transcribe', {
+          method: 'POST',
+          headers: authHeaders({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ source }),
+        });
+        const body = await r.json();
+        document.getElementById('jobIdInput').value = body.job_id || '';
+        writeJSON('enqueueResult', body);
+      }
+
+      async function uploadFile() {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return;
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        const r = await fetch('/v1/intake', {
+          method: 'POST',
+          body: fd,
+          headers: authHeaders(),
+        });
+        const body = await r.json();
+        document.getElementById('jobIdInput').value = body.job_id || '';
+        writeJSON('enqueueResult', body);
+      }
+
+      async function pollJob() {
+        const jobId = document.getElementById('jobIdInput').value.trim();
+        if (!jobId) return;
+
+        const r = await fetch(`/v1/job/${jobId}`, { headers: authHeaders() });
+        const body = await r.json();
+        writeJSON('jobDetails', body);
+
+        document.getElementById('jobStatusLabel').textContent = body.status || 'unknown';
+        const pct = body.status === 'succeeded' ? 100 : (body.status === 'running' ? 50 : 10);
+        document.getElementById('jobProgress').value = pct;
+      }
+    </script>
+  </body>
+</html>
