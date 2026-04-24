@@ -15,8 +15,10 @@ import threading
 from datetime import datetime
 
 from flask import Flask, request, jsonify
+from markupsafe import escape
 
-from . import utils as app_utils
+from .pipeline import utils as app_utils
+from . import config_store
 from .pipeline import rename as rename_module
 from .pipeline import metadata as metadata_module
 from .pipeline import audio as audio_module
@@ -44,18 +46,25 @@ def create_app():
     # In‑memory job store
     jobs = {}
 
-    # Preload the Whisper model when the first request arrives. Using
-    # before_first_request avoids the overhead during the WSGI app
-    # import. The model object is stored on the Flask app for reuse.
-    @app.before_first_request
-    def load_whisper_model():
-        if WhisperModel is None:
-            app.logger.warning("faster-whisper is not installed; transcription will not work")
+    # Pull config (including ANTHROPIC_API_KEY) from Airtable at startup.
+    # Runs in a background thread so it never blocks the first request.
+    threading.Thread(target=config_store.load, daemon=True).start()
+
+    _whisper_lock = threading.Lock()
+
+    def _ensure_whisper_model():
+        """Load Whisper model on first use (thread-safe)."""
+        if hasattr(app, "whisper_model"):
             return
-        app.logger.info(f"Loading Whisper model: {whisper_size}")
-        # Use int8 compute type on CPU to reduce RAM usage
-        app.whisper_model = WhisperModel(whisper_size, device="cpu", compute_type="int8")
-        app.logger.info("Whisper model loaded")
+        with _whisper_lock:
+            if hasattr(app, "whisper_model"):
+                return
+            if WhisperModel is None:
+                app.logger.warning("faster-whisper is not installed; transcription will not work")
+                return
+            app.logger.info("Loading Whisper model: %s", whisper_size)
+            app.whisper_model = WhisperModel(whisper_size, device="cpu", compute_type="int8")
+            app.logger.info("Whisper model loaded")
 
     @app.route("/health", methods=["GET"])
     def health():
@@ -135,6 +144,7 @@ def create_app():
 
     @app.route("/transcribe", methods=["POST"])
     def transcribe_endpoint():
+        _ensure_whisper_model()
         if not hasattr(app, "whisper_model"):
             return jsonify({"error": "Whisper model not loaded"}), 500
         data = request.get_json(force=True, silent=True) or {}
@@ -214,6 +224,7 @@ def create_app():
             # Extract audio
             audio_path = audio_module.extract_audio(renamed_path, "wav")
             # Transcribe synchronously
+            _ensure_whisper_model()
             if not hasattr(app, "whisper_model"):
                 return jsonify({"error": "Whisper model not loaded"}), 500
             srt_path = transcribe_module.transcribe_audio(
@@ -233,8 +244,8 @@ def create_app():
                 "edl_path": None,
             }
 
-            # Generate EDL automatically if API key is present
-            if os.getenv("ANTHROPIC_API_KEY"):
+            # Generate EDL automatically if API key is present (checks Airtable then env)
+            if config_store.get("ANTHROPIC_API_KEY"):
                 tape_id = data.get("tape_id") or new_name.replace(".mp4", "")
                 theme = data.get("theme") or os.getenv("EDL_THEME", "selects")
                 criteria = data.get("criteria") or os.getenv(
@@ -258,6 +269,154 @@ def create_app():
         except Exception as exc:
             app.logger.exception("Error processing file")
             return jsonify({"error": str(exc)}), 500
+
+    # ── /setup wizard ────────────────────────────────────────────────────────
+
+    _SETUP_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pipeline Setup</title>
+  <style>
+    body{{font-family:system-ui,sans-serif;max-width:640px;margin:40px auto;padding:0 20px;color:#222}}
+    h1{{font-size:1.6rem;margin-bottom:.25rem}}
+    .subtitle{{color:#666;margin-bottom:2rem}}
+    .card{{border:1px solid #ddd;border-radius:8px;padding:1.2rem;margin-bottom:1.2rem}}
+    .card h2{{margin:0 0 .8rem;font-size:1rem;text-transform:uppercase;letter-spacing:.05em;color:#555}}
+    .row{{display:flex;align-items:center;gap:.5rem;margin:.3rem 0}}
+    .dot{{width:10px;height:10px;border-radius:50%;flex-shrink:0}}
+    .green{{background:#22c55e}} .red{{background:#ef4444}} .gray{{background:#9ca3af}}
+    label{{display:block;margin-bottom:.25rem;font-size:.9rem}}
+    input[type=text]{{width:100%;padding:.5rem .75rem;border:1px solid #ccc;border-radius:6px;font-size:.95rem;box-sizing:border-box}}
+    button{{padding:.5rem 1.2rem;border:none;border-radius:6px;cursor:pointer;font-size:.95rem}}
+    .btn-primary{{background:#3b82f6;color:#fff}} .btn-primary:hover{{background:#2563eb}}
+    .btn-secondary{{background:#e5e7eb;color:#222}} .btn-secondary:hover{{background:#d1d5db}}
+    .msg{{margin-top:.75rem;padding:.6rem .9rem;border-radius:6px;font-size:.9rem}}
+    .msg.ok{{background:#dcfce7;color:#166534}} .msg.err{{background:#fee2e2;color:#991b1b}}
+    .keys{{font-size:.85rem;color:#555;margin-top:.4rem}}
+    footer{{text-align:center;color:#9ca3af;font-size:.8rem;margin-top:2rem}}
+  </style>
+</head>
+<body>
+  <h1>Video Pipeline Setup</h1>
+  <p class="subtitle">Configure API credentials. Keys are never stored on disk — they live in Airtable.</p>
+
+  <div class="card">
+    <h2>Airtable</h2>
+    <div class="row">
+      <div class="dot {at_color}"></div>
+      <span>{at_label}</span>
+    </div>
+    {at_keys_html}
+    <form method="POST" action="/setup/connect" style="margin-top:1rem">
+      <label>Airtable Personal Access Token</label>
+      <input type="text" name="airtable_api_key" placeholder="pat..." value="{at_key_display}">
+      <label style="margin-top:.6rem">Base ID</label>
+      <input type="text" name="airtable_base_id" placeholder="app..." value="{base_id_display}">
+      <button class="btn-primary" type="submit" style="margin-top:.8rem">Connect / Test</button>
+    </form>
+    {at_msg_html}
+  </div>
+
+  <div class="card">
+    <h2>Anthropic (Claude)</h2>
+    <div class="row">
+      <div class="dot {ant_color}"></div>
+      <span>{ant_label}</span>
+    </div>
+    <p style="font-size:.85rem;color:#555;margin:.6rem 0 0">
+      Add <code>ANTHROPIC_API_KEY</code> to the <strong>Config</strong> table in your Airtable base
+      (Key column = <code>ANTHROPIC_API_KEY</code>, Value column = your key). Then click Reload.
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>EDL Generation</h2>
+    <div class="row">
+      <div class="dot {edl_color}"></div>
+      <span>{edl_label}</span>
+    </div>
+  </div>
+
+  <form method="POST" action="/setup/reload">
+    <button class="btn-secondary" type="submit">↻ Reload config from Airtable</button>
+  </form>
+  {reload_msg_html}
+
+  <footer>Video Archive Pipeline · <a href="/health">/health</a></footer>
+</body>
+</html>"""
+
+    def _build_setup_page(msg: str = "", msg_type: str = "ok", reload_msg: str = "") -> str:
+        st = config_store.status()
+        at_ok = st["airtable_connected"]
+        ant_ok = st["anthropic_key_available"]
+        edl_ok = st["edl_enabled"]
+
+        at_color = "green" if at_ok else "red"
+        at_label = f"Connected to base {escape(st['airtable_base_id'])}" if at_ok else "Not connected"
+        ant_color = "green" if ant_ok else "gray"
+        ant_label = "API key available" if ant_ok else "No key found — see instructions below"
+        edl_color = "green" if edl_ok else "gray"
+        edl_label = "Ready — EDL generation enabled" if edl_ok else "Disabled (Anthropic key required)"
+
+        found_keys = st.get("config_keys_found", [])
+        at_keys_html = (
+            f'<div class="keys">Keys in Config table: {", ".join(escape(k) for k in found_keys) or "(none)"}</div>'
+            if at_ok else ""
+        )
+
+        at_key_display = escape(os.getenv("AIRTABLE_API_KEY", ""))
+        base_id_display = escape(st["airtable_base_id"] if st["airtable_base_id"] != "(not set)" else "")
+
+        at_msg_html = f'<div class="msg {msg_type}">{escape(msg)}</div>' if msg else ""
+        reload_msg_html = f'<div class="msg ok" style="margin-top:.6rem">{escape(reload_msg)}</div>' if reload_msg else ""
+
+        return _SETUP_HTML.format(
+            at_color=at_color, at_label=at_label, at_keys_html=at_keys_html,
+            ant_color=ant_color, ant_label=ant_label,
+            edl_color=edl_color, edl_label=edl_label,
+            at_key_display=at_key_display, base_id_display=base_id_display,
+            at_msg_html=at_msg_html, reload_msg_html=reload_msg_html,
+        )
+
+    @app.route("/setup", methods=["GET"])
+    def setup_page():
+        return _build_setup_page()
+
+    @app.route("/setup/connect", methods=["POST"])
+    def setup_connect():
+        api_key = (request.form.get("airtable_api_key") or "").strip()
+        base_id = (request.form.get("airtable_base_id") or "").strip()
+
+        if api_key:
+            os.environ["AIRTABLE_API_KEY"] = api_key
+        if base_id:
+            os.environ["AIRTABLE_BASE_ID"] = base_id
+
+        result = config_store.reload()
+        st = config_store.status()
+        if st["airtable_connected"]:
+            msg = f"Connected! Found {len(result)} config value(s)."
+            msg_type = "ok"
+        else:
+            msg = "Could not connect. Check your token and base ID."
+            msg_type = "err"
+
+        return _build_setup_page(msg=msg, msg_type=msg_type)
+
+    @app.route("/setup/reload", methods=["POST"])
+    def setup_reload():
+        result = config_store.reload()
+        st = config_store.status()
+        if st["airtable_connected"]:
+            reload_msg = f"Reloaded {len(result)} value(s) from Airtable."
+        else:
+            reload_msg = "Reload attempted — Airtable not reachable (SRT-only mode)."
+        return _build_setup_page(reload_msg=reload_msg)
+
+    # ── end /setup ────────────────────────────────────────────────────────────
 
     return app
 

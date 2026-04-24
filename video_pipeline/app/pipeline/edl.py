@@ -9,7 +9,6 @@ so the caller can decide whether to hard-fail or skip gracefully.
 """
 
 import logging
-import os
 import re
 from pathlib import Path
 
@@ -60,10 +59,12 @@ def generate_edl(
             "anthropic package is not installed — add 'anthropic' to requirements.txt"
         )
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    from .. import config_store
+    api_key = config_store.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set — add it to your .env file to enable EDL generation"
+            "ANTHROPIC_API_KEY is not available — add it to your Airtable Config table "
+            "(Key=ANTHROPIC_API_KEY) or to your .env file to enable EDL generation"
         )
 
     src = Path(srt_path).resolve()
