@@ -44,6 +44,12 @@ class InMemoryJobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def list_jobs(self, limit: int = 100) -> list[JobRecord]:
+        with self._lock:
+            jobs = list(self._jobs.values())
+        jobs.sort(key=lambda x: x.updated_at, reverse=True)
+        return jobs[:limit]
+
     def set_status(
         self,
         job_id: str,

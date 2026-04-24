@@ -93,6 +93,32 @@ class SQLiteJobStore:
             error=row[7],
         )
 
+    def list_jobs(self, limit: int = 100) -> list[JobRecord]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT job_id, source, provider, status, created_at, updated_at, result_text, error
+                FROM jobs
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+
+        return [
+            JobRecord(
+                job_id=row[0],
+                source=row[1],
+                provider=row[2],
+                status=row[3],
+                created_at=row[4],
+                updated_at=row[5],
+                result_text=row[6],
+                error=row[7],
+            )
+            for row in rows
+        ]
+
     def set_status(
         self,
         job_id: str,
