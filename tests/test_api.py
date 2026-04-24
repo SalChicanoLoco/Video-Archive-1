@@ -70,6 +70,13 @@ def test_error_contract_for_not_found() -> None:
     assert "request_id" in body
 
 
+def test_job_events_not_found() -> None:
+    response = client.get("/v1/job/not-a-real-job-id/events")
+    assert response.status_code == 404
+    body = response.json()
+    assert body["code"] == "NOT_FOUND"
+
+
 def test_api_key_protection_when_enabled() -> None:
     original = settings.api_key
     settings.api_key = "supersecret"

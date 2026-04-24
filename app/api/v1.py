@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Query, Request, UploadFile
 
 from app.config import settings
 from app.jobs.events import event_store
@@ -142,7 +142,15 @@ async def get_job(job_id: str, _auth: None = Depends(require_api_key)) -> Transc
     responses=ERROR_RESPONSES,
     summary="Get job event timeline",
 )
-async def get_job_events(job_id: str, limit: int = 100, _auth: None = Depends(require_api_key)) -> JobEventsListResponse:
+async def get_job_events(
+    job_id: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+    _auth: None = Depends(require_api_key),
+) -> JobEventsListResponse:
+    record = job_store.get_job(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
     events = event_store.for_job(job_id=job_id, limit=limit)
     return JobEventsListResponse(
         events=[
