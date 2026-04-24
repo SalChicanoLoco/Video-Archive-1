@@ -38,28 +38,16 @@ class TranscriptionJobStatusResponse(BaseModel):
     status: str
     source: str
     provider: str
-    retry_count: int
-    max_retries: int
     result_text: str | None = None
     error: str | None = None
     created_at: str
     updated_at: str
 
 
-class JobEventResponse(BaseModel):
-    job_id: str
-    event: str
-    timestamp: str
-    detail: str | None = None
-
-
-class JobEventsListResponse(BaseModel):
-    events: list[JobEventResponse]
-
-
 class TranscriptionJobsListResponse(BaseModel):
     jobs: list[TranscriptionJobStatusResponse]
 
 
-class JobsPruneResponse(BaseModel):
-    deleted_count: int
+class PruneResponse(BaseModel):
+    deleted: int
+    kept: int
