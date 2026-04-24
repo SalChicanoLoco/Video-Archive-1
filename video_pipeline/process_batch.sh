@@ -98,7 +98,22 @@ for mp4 in "${FILES[@]}"; do
         case "$status" in
             finished)
                 srt=$(python3 -c "import sys,json; d=json.loads('$status_resp'); print(d.get('result',{}).get('srt_path',''))" 2>/dev/null)
-                ok "$filename → $srt"
+
+                # ── Step 4: Generate EDL (if ANTHROPIC_API_KEY is set) ───────
+                edl_result=""
+                if [ -n "${ANTHROPIC_API_KEY:-}" ] && [ -n "$srt" ]; then
+                    tape_id="$(basename "$mp4" .mp4)"
+                    theme="${EDL_THEME:-selects}"
+                    criteria="${EDL_CRITERIA:-Select the most significant, clearly spoken moments. Prefer complete thoughts over fragments.}"
+                    info "  Generating EDL (Claude)…"
+                    edl_resp=$(curl -sf -X POST "$API/generate-edl" \
+                        -H "Content-Type: application/json" \
+                        -d "{\"srt_path\": \"$srt\", \"tape_id\": \"$tape_id\", \"theme\": \"$theme\", \"criteria\": \"$criteria\"}" 2>&1) || true
+                    edl_result=$(python3 -c "import sys,json; d=json.loads('$edl_resp'); print(d.get('edl_path','') or d.get('error',''))" 2>/dev/null || echo "EDL skipped")
+                    info "  EDL: $edl_result"
+                fi
+
+                ok "$filename → SRT: $srt${edl_result:+ | EDL: $edl_result}"
                 PASSED=$((PASSED + 1))
                 break
                 ;;

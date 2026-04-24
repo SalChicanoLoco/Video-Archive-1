@@ -8,3 +8,4 @@ python-dateutil==2.9.0.post0
 requests==2.33.1
 pyairtable==3.3.0
 python-dotenv==1.2.2
+anthropic>=0.40.0

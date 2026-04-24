@@ -21,6 +21,7 @@ from .pipeline import rename as rename_module
 from .pipeline import metadata as metadata_module
 from .pipeline import audio as audio_module
 from .pipeline import transcribe as transcribe_module
+from .pipeline import edl as edl_module
 
 try:
     from faster_whisper import WhisperModel
@@ -160,6 +161,38 @@ def create_app():
             return jsonify({"error": "job not found"}), 404
         return jsonify(job), 200
 
+    @app.route("/generate-edl", methods=["POST"])
+    def generate_edl_endpoint():
+        """Generate a CMX 3600 EDL from an existing SRT file via Claude API."""
+        data = request.get_json(force=True, silent=True) or {}
+        srt_path = data.get("srt_path")
+        tape_id = data.get("tape_id") or "TAPE"
+        theme = data.get("theme") or os.getenv("EDL_THEME", "selects")
+        criteria = data.get("criteria") or os.getenv(
+            "EDL_CRITERIA",
+            "Select the most significant, clearly spoken moments. "
+            "Prefer complete thoughts over fragments.",
+        )
+        frame_rate = data.get("frame_rate", "30fps NDF")
+
+        if not srt_path:
+            return jsonify({"error": "srt_path field is required"}), 400
+        try:
+            edl_path = edl_module.generate_edl(
+                srt_path=srt_path,
+                tape_id=tape_id,
+                theme=theme,
+                criteria=criteria,
+                frame_rate=frame_rate,
+            )
+            return jsonify({"edl_path": edl_path}), 200
+        except RuntimeError as exc:
+            # Missing API key or package — caller should know it's config, not a bug
+            return jsonify({"error": str(exc)}), 503
+        except Exception as exc:
+            app.logger.exception("Error generating EDL")
+            return jsonify({"error": str(exc)}), 500
+
     @app.route("/process", methods=["POST"])
     def process_endpoint():
         """Run the full pipeline synchronously on a single video file."""
@@ -197,7 +230,30 @@ def create_app():
                 "title": title,
                 "date": date,
                 "comment": comment,
+                "edl_path": None,
             }
+
+            # Generate EDL automatically if API key is present
+            if os.getenv("ANTHROPIC_API_KEY"):
+                tape_id = data.get("tape_id") or new_name.replace(".mp4", "")
+                theme = data.get("theme") or os.getenv("EDL_THEME", "selects")
+                criteria = data.get("criteria") or os.getenv(
+                    "EDL_CRITERIA",
+                    "Select the most significant, clearly spoken moments. "
+                    "Prefer complete thoughts over fragments.",
+                )
+                try:
+                    edl_path = edl_module.generate_edl(
+                        srt_path=srt_path,
+                        tape_id=tape_id,
+                        theme=theme,
+                        criteria=criteria,
+                    )
+                    job_dict["edl_path"] = edl_path
+                except Exception as exc:
+                    app.logger.warning("EDL generation skipped: %s", exc)
+                    job_dict["edl_warning"] = str(exc)
+
             return jsonify(job_dict), 200
         except Exception as exc:
             app.logger.exception("Error processing file")
