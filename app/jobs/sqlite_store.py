@@ -93,17 +93,27 @@ class SQLiteJobStore:
             error=row[7],
         )
 
-    def list_jobs(self, limit: int = 100) -> list[JobRecord]:
-        with self._lock, self._connect() as conn:
-            rows = conn.execute(
-                """
+    def list_jobs(self, limit: int = 100, status: str | None = None) -> list[JobRecord]:
+        if status is not None:
+            query = """
+                SELECT job_id, source, provider, status, created_at, updated_at, result_text, error
+                FROM jobs
+                WHERE status = ?
+                ORDER BY updated_at DESC
+                LIMIT ?
+            """
+            params: tuple = (status, limit)
+        else:
+            query = """
                 SELECT job_id, source, provider, status, created_at, updated_at, result_text, error
                 FROM jobs
                 ORDER BY updated_at DESC
                 LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+            """
+            params = (limit,)
+
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
 
         return [
             JobRecord(
@@ -118,6 +128,20 @@ class SQLiteJobStore:
             )
             for row in rows
         ]
+
+    def prune_jobs(self, keep_latest: int = 500) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM jobs
+                WHERE job_id NOT IN (
+                    SELECT job_id FROM jobs ORDER BY updated_at DESC LIMIT ?
+                )
+                """,
+                (keep_latest,),
+            )
+            conn.commit()
+        return cursor.rowcount
 
     def set_status(
         self,

@@ -7,6 +7,8 @@ import uuid
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.metrics import inc_request
+
 logger = logging.getLogger("video_archive.api")
 
 
@@ -19,6 +21,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
 
+        inc_request(response.status_code)
         response.headers["X-Request-ID"] = request_id
         logger.info(
             "request_id=%s method=%s path=%s status=%s duration_ms=%s",

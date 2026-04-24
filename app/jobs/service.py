@@ -5,6 +5,7 @@ from typing import Protocol
 from app.config import settings
 from app.jobs.sqlite_store import SQLiteJobStore
 from app.jobs.store import InMemoryJobStore, JobRecord
+from app.metrics import inc_job_event
 from app.providers.factory import UnsupportedProviderError, get_provider
 
 
@@ -13,7 +14,7 @@ class JobStore(Protocol):
 
     def get_job(self, job_id: str) -> JobRecord | None: ...
 
-    def list_jobs(self, limit: int = 100) -> list[JobRecord]: ...
+    def list_jobs(self, limit: int = 100, status: str | None = None) -> list[JobRecord]: ...
 
     def set_status(
         self,
@@ -22,6 +23,8 @@ class JobStore(Protocol):
         result_text: str | None = None,
         error: str | None = None,
     ) -> JobRecord | None: ...
+
+    def prune_jobs(self, keep_latest: int = 500) -> int: ...
 
 
 def _build_job_store() -> JobStore:
@@ -46,6 +49,7 @@ job_store: JobStore = _build_job_store()
 def enqueue_job(source: str, provider: str) -> JobRecord:
     record = job_store.create_job(source=source, provider=provider)
     _airtable_log("job.created", {"job_id": record.job_id, "source": source, "provider": provider})
+    inc_job_event("created")
     return record
 
 
@@ -56,15 +60,19 @@ async def run_transcription_job(job_id: str) -> None:
 
     job_store.set_status(job_id, status="running")
     _airtable_log("job.running", {"job_id": job_id})
+    inc_job_event("running")
 
     try:
         provider = get_provider(job.provider)
         result = await provider.transcribe(job.source)
         job_store.set_status(job_id, status="succeeded", result_text=result.text)
         _airtable_log("job.succeeded", {"job_id": job_id})
+        inc_job_event("succeeded")
     except UnsupportedProviderError as exc:
         job_store.set_status(job_id, status="failed", error=str(exc))
         _airtable_log("job.failed", {"job_id": job_id, "reason": str(exc)})
+        inc_job_event("failed")
     except Exception as exc:  # defensive catch for background task stability
         job_store.set_status(job_id, status="failed", error=str(exc))
         _airtable_log("job.failed", {"job_id": job_id, "reason": str(exc)})
+        inc_job_event("failed")
