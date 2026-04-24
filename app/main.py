@@ -1,23 +1,27 @@
-import logging
+from fastapi import FastAPI, HTTPException
 
-from fastapi import FastAPI, Request
-
-from app.api.v1 import router as v1_router
 from app.config import settings
-from app.middleware.request_context import RequestContextMiddleware
-
-logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+from app.providers.factory import UnsupportedProviderError, get_provider
+from app.schemas.transcription import TranscriptionRequest, TranscriptionResponse
 
 app = FastAPI(title=settings.app_name)
-app.add_middleware(RequestContextMiddleware)
-app.include_router(v1_router)
 
 
-@app.get("/")
-async def root(request: Request) -> dict[str, str]:
+@app.get("/health")
+async def health() -> dict[str, str]:
     return {
-        "service": settings.app_name,
         "status": "ok",
-        "latest_api": "/v1",
-        "request_id": request.state.request_id,
+        "environment": settings.app_env,
+        "provider": settings.transcription_provider,
     }
+
+
+@app.post("/transcribe", response_model=TranscriptionResponse)
+async def transcribe(payload: TranscriptionRequest) -> TranscriptionResponse:
+    try:
+        provider = get_provider(settings.transcription_provider)
+    except UnsupportedProviderError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    result = await provider.transcribe(payload.source)
+    return TranscriptionResponse(text=result.text, provider=result.provider)
