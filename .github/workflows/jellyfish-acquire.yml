@@ -1,0 +1,37 @@
+name: NUMARA Jellyfish media acquisition
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '21 13 * * *'
+permissions:
+  contents: write
+jobs:
+  acquire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    defaults:
+      run:
+        working-directory: tools/jellyfish-acquisition
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/jellyfish-acquisition/requirements.txt
+      - run: python -m pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - name: Acquire public Space Force media (GitHub Release is cloud archive)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          JELLYFISH_STORAGE: github-release
+        run: python -m agent.acquire --config config/crs35.json --out runtime --storage github-release
+      - name: Attach run audit (NOT physical validation)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: numara-jellyfish-run-${{ github.run_id }}
+          path: tools/jellyfish-acquisition/runtime/acquisition_journal.jsonl
+          if-no-files-found: warn
+          retention-days: 90
