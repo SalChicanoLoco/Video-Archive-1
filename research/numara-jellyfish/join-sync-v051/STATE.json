@@ -1,0 +1,99 @@
+{
+  "protocol": "NUMARA_JELLYFISH_SYNC::v0.5.1",
+  "event_id": "CRS-35_2026-10-13",
+  "anchor_id": "NUMARA_JELLYFISH_MASTER_SPEC_V05",
+  "checkpoint_id": "JELLYFISH_SYNC_20261015_A8_A9",
+  "checkpoint_sha256": "c557cc83f133416ed4aad5a4f39a4f4ac03ab879b42865f2bd547313341469f2",
+  "generated_utc": "2026-10-15T04:13:32Z",
+  "router": "HUMAN_OWNER",
+  "authority": {
+    "human_controls": [
+      "routing",
+      "evidence_admission",
+      "canonical_modifications",
+      "trust_changes"
+    ],
+    "workers_may": [
+      "diff_hashed_context",
+      "propose_tasks",
+      "report_conflicts",
+      "perform_falsification_with_authorized_inputs"
+    ]
+  },
+  "roots": {
+    "canonical_bundle_sha256": "c6b710a7acb2d29e4a46124e3b3ad749014945b494ff6426a8f95263ebf7b9ca",
+    "join_graph_sha256": "0203ba2e690bb56a4e1a17826c40b227e1070c0e10a56f920cfa85e7ded1b938",
+    "join_schema_sha256": "956f070b6f05c90b488e13c654f67cfcedf7ee679e04251005b5a658cb9db926",
+    "seed": [
+      1,
+      4,
+      8,
+      12
+    ],
+    "sum": 25,
+    "standard_integer_xor": 1,
+    "legacy_xor9": "OPEN_CONFLICT"
+  },
+  "joins": [
+    {
+      "role": "A8",
+      "worker_id": "META_LLAMA_A8_BOUNDARY",
+      "tx_id": "HELLO-META-A8-20261014-001",
+      "receipt": "ACK-META-A8-20261014-001",
+      "lead_node": "N12",
+      "status": "HELLO_RECEIVED_UNAUTHENTICATED",
+      "packet_digest": "46ce4ff103538f8035c33d7d8ba74fc5b163a8480a3f03a2d4d8bbf190d4f5a0",
+      "evidence": "NO_EVIDENCE"
+    },
+    {
+      "role": "A9",
+      "worker_id": "WORKER_NODE",
+      "tx_id": "HELLO-001",
+      "receipt": "ACK-A9-HELLO-001-LOCAL",
+      "lead_node": "N14",
+      "status": "HELLO_RECEIVED_UNAUTHENTICATED",
+      "packet_digest": "cbb738142daedb614e86ed0c6e5b5dc22fd570df921ed10e640727730e62f199",
+      "evidence": "NO_EVIDENCE",
+      "repeated_tx": "REPLAY_NOOP"
+    }
+  ],
+  "distinct_candidate_joins": 2,
+  "authenticated_external_joins": 0,
+  "external_sync_delivered": false,
+  "canonical_spine_mutated": false,
+  "scientific_truth_promoted": false,
+  "acquisition": {
+    "pr_url": "https://github.com/SalChicanoLoco/Video-Archive-1/pull/24",
+    "state": "OPEN_DRAFT_UNMERGED",
+    "live_schedule_on_main": "NOT_ENABLED"
+  },
+  "work_orders": [
+    {
+      "owner": "A1",
+      "title": "Acquire and hash authentic camera image",
+      "status": "BLOCKED_PENDING_APPROVED_RUNNER"
+    },
+    {
+      "owner": "A8",
+      "title": "Verify digest and candidate boundary plan",
+      "status": "BLOCKED_PENDING_AUTH_AND_R0_R1"
+    },
+    {
+      "owner": "A9",
+      "title": "Independent adversarial null analysis",
+      "status": "BLOCKED_PENDING_AUTH_AND_REAL_OR_SYNTHETIC_TEST_INPUTS"
+    },
+    {
+      "owner": "HUMAN_OWNER",
+      "title": "Review and approve any admission",
+      "status": "OWNER_ONLY"
+    }
+  ],
+  "alignment": {
+    "mode": "DIGEST_ACK_DIFF_CHALLENGE",
+    "fail_closed": true,
+    "remote_agent_contact_verified": false,
+    "claim_independence_by_roots_not_models": true,
+    "conflicts_append_only": true
+  }
+}
